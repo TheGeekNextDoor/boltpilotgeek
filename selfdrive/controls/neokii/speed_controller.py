@@ -288,7 +288,7 @@ class SpeedController:
     clu_speed = CS.vEgoCluster * self.speed_conv_to_clu
     ascc_enabled = enabled and CS.cruiseState.enabled and 1 < CS.cruiseState.speed < 255 and not CS.brakePressed
 
-    btn_pressed = self.CI.CS.cruise_buttons[-1] != Buttons.NONE
+    btn_pressed = self.CI.CS.cruise_buttons != Buttons.NONE
 
     if not self.long_control:
       if not ascc_enabled or CS.cruiseState.standstill or btn_pressed:

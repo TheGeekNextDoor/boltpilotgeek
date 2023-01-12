@@ -68,12 +68,12 @@ class CruiseStateManager:
 
     if available >= 0:
       self.available = available
-    elif main_buttons[-1] != self.prev_main_buttons and main_buttons[-1]:
+    elif main_buttons != self.prev_main_buttons and main_buttons:
       self.available = not self.available
 
-    self.prev_main_buttons = main_buttons[-1]
+    self.prev_main_buttons = main_buttons
 
-    cruise_button = cruise_buttons[-1]
+    cruise_button = cruise_buttons
     if cruise_button != self.prev_cruise_button:
       self.button_events = [create_button_event(cruise_button, self.prev_cruise_button, buttons_dict)]
       if cruise_button != 0 and self.prev_cruise_button != 0:
