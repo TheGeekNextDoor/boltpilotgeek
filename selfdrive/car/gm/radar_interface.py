@@ -3,7 +3,7 @@ import math
 from cereal import car
 from common.conversions import Conversions as CV
 from opendbc.can.parser import CANParser
-from selfdrive.car.gm.values import DBC, CanBus
+from selfdrive.car.gm.values import CAR, DBC, CanBus
 from selfdrive.car.interfaces import RadarInterfaceBase
 
 RADAR_HEADER_MSG = 1120
