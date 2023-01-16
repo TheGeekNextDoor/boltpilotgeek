@@ -375,12 +375,12 @@ void AnnotatedCameraWidget::drawLaneLines(QPainter &painter, const UIState *s) {
   painter.restore();
 }
 
-void AnnotatedCameraWidget::drawLead(QPainter &painter, const cereal::ModelDataV2::LeadDataV3::Reader &lead_data, const QPointF &vd, bool is_radar) {
+void AnnotatedCameraWidget::drawLead(QPainter &painter, const cereal::RadarState::LeadData::Reader &lead_data, const QPointF &vd, bool is_radar) {
   painter.save();
   const float speedBuff = 10.;
   const float leadBuff = 40.;
-  const float d_rel = lead_data.getX()[0];
-  const float v_rel = lead_data.getV()[0];
+  const float d_rel = lead_data.getDRel();
+  const float v_rel = lead_data.getVRel();
 
   float fillAlpha = 0;
   if (d_rel < leadBuff) {
@@ -418,6 +418,7 @@ void AnnotatedCameraWidget::paintEvent(QPaintEvent *event) {
   SubMaster &sm = *(s->sm);
   const double start_draw_t = millis_since_boot();
   const cereal::ModelDataV2::Reader &model = sm["modelV2"].getModelV2();
+  const cereal::RadarState::Reader &radar_state = sm["radarState"].getRadarState();
 
   QPainter p(this);
 
@@ -470,10 +471,9 @@ void AnnotatedCameraWidget::paintEvent(QPaintEvent *event) {
     if (sm.rcv_frame("modelV2") > s->scene.started_frame) {
       update_model(s, sm["modelV2"].getModelV2());
       if (sm.rcv_frame("radarState") > s->scene.started_frame) {
-        update_leads(s, sm["radarState"].getRadarState(), sm["modelV2"].getModelV2().getPosition());
+        update_leads(s, radar_state, sm["modelV2"].getModelV2().getPosition());
       }
     }
-
     drawHud(p, model);
   }
 
@@ -555,15 +555,18 @@ void AnnotatedCameraWidget::drawHud(QPainter &p, const cereal::ModelDataV2::Read
   UIState *s = uiState();
 
   const SubMaster &sm = *(s->sm);
+  const cereal::RadarState::Reader &radar_state = sm["radarState"].getRadarState();
 
   drawLaneLines(p, s);
 
-  auto leads = model.getLeadsV3();
-  if (leads[0].getProb() > .5) {
-    drawLead(p, leads[0], s->scene.lead_vertices[0], s->scene.lead_radar[0]);
+  
+  auto lead_one = radar_state.getLeadOne();
+  auto lead_two = radar_state.getLeadTwo();
+  if (lead_one.getStatus()) {
+    drawLead(p, lead_one, s->scene.lead_vertices[0], s->scene.lead_radar[0]);
   }
-  if (leads[1].getProb() > .5 && (std::abs(leads[1].getX()[0] - leads[0].getX()[0]) > 3.0)) {
-    drawLead(p, leads[1], s->scene.lead_vertices[1], s->scene.lead_radar[1]);
+  if (lead_two.getStatus() && (std::abs(lead_one.getDRel() - lead_two.getDRel()) > 3.0)) {
+    drawLead(p, lead_two, s->scene.lead_vertices[1], s->scene.lead_radar[1]);
   }
 
   drawMaxSpeed(p);
@@ -582,7 +585,7 @@ void AnnotatedCameraWidget::drawHud(QPainter &p, const cereal::ModelDataV2::Read
   const auto torque_state = controls_state.getLateralControlState().getTorqueState();
 
   QString infoText;
-  infoText.sprintf("TP(%.2f/%.2f) LTP(%.2f/%.2f/%.0f) AO(%.2f/%.2f) SR(%.2f), SAD(%.2f) SCC(%d)",
+  infoText.sprintf("TP(%.2f/%.2f) LTP(%.2f/%.2f/%.0f) AO(%.2f/%.2f) SR(%.2f) SAD(%.2f) PC(%.1f) SCC(%d)",
 
                       torque_state.getLatAccelFactor(),
                       torque_state.getFriction(),
@@ -596,6 +599,7 @@ void AnnotatedCameraWidget::drawHud(QPainter &p, const cereal::ModelDataV2::Read
 
                       car_control.getSteerRatio(),
                       car_control.getSteerActuatorDelay(),
+                      car_control.getPathCost(),
 
                       car_control.getSccBus()
                       );
