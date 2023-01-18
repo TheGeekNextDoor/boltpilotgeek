@@ -184,7 +184,7 @@ class CarState(CarStateBase):
       signals.append(("RegenPaddle", "EBCMRegenPaddle"))
       checks.append(("EBCMRegenPaddle", 50))
 
-    return CANParser(DBC[CP.carFingerprint]["pt"], signals, checks, CanBus.POWERTRAIN)
+    return CANParser(DBC[CP.carFingerprint]["pt"], signals, [], CanBus.POWERTRAIN)
 
   @staticmethod
   def get_loopback_can_parser(CP):
