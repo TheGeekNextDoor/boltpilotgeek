@@ -177,15 +177,15 @@ class SpeedController:
 
 
         try:
-          print("spped_controller try 180")
-          dy = np.gradient(y, x)
-          d2y = np.gradient(dy, x)
+          with np.errstate(divide='ignore', invalid='ignore'):
+            dy = np.gradient(y, x)
+            d2y = np.gradient(dy, x)
         except Exception as e:
             print("spped_controller except 184")
             print("cal_curve_speed error: ", e)
             self.curve_speed_ms = 255.
             return
-        print("spped_controller go 188")
+        
         curv = d2y / (1 + dy ** 2) ** 1.5
 
         start = int(interp(v_ego, [10., 27.], [10, TRAJECTORY_SIZE-10]))
