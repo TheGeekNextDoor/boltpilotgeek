@@ -8,10 +8,9 @@
 #include <vector>
 #include <mutex>
 #include <cstring>
-#include <iterator>
 
-#include "opendbc/can/common.h"
-#include "opendbc/can/common_dbc.h"
+#include "common.h"
+#include "common_dbc.h"
 
 std::regex bo_regexp(R"(^BO_ (\w+) (\w+) *: (\w+) (\w+))");
 std::regex sg_regexp(R"(^SG_ (\w+) : (\d+)\|(\d+)@(\d+)([\+|\-]) \(([0-9.+\-eE]+),([0-9.+\-eE]+)\) \[([0-9.+\-eE]+)\|([0-9.+\-eE]+)\] \"(.*)\" (.*))");
@@ -48,13 +47,23 @@ inline std::string& trim(std::string& s, const char* t = " \t\n\r\f\v") {
   return s.erase(0, s.find_first_not_of(t));
 }
 
+typedef struct ChecksumState {
+  int checksum_size;
+  int counter_size;
+  int checksum_start_bit;
+  int counter_start_bit;
+  bool little_endian;
+  SignalType checksum_type;
+  unsigned int (*calc_checksum)(uint32_t address, const Signal &sig, const std::vector<uint8_t> &d);
+} ChecksumState;
+
 ChecksumState* get_checksum(const std::string& dbc_name) {
   ChecksumState* s = nullptr;
   if (startswith(dbc_name, {"honda_", "acura_"})) {
     s = new ChecksumState({4, 2, 3, 5, false, HONDA_CHECKSUM, &honda_checksum});
   } else if (startswith(dbc_name, {"toyota_", "lexus_"})) {
     s = new ChecksumState({8, -1, 7, -1, false, TOYOTA_CHECKSUM, &toyota_checksum});
-  } else if (startswith(dbc_name, "hyundai_canfd")) {
+  } else if (startswith(dbc_name, "kia_ev6")) {
     s = new ChecksumState({16, -1, 0, -1, true, HKG_CAN_FD_CHECKSUM, &hkg_can_fd_checksum});
   } else if (startswith(dbc_name, "vw_mqb_2010")) {
     s = new ChecksumState({8, 4, 0, 0, true, VOLKSWAGEN_MQB_CHECKSUM, &volkswagen_mqb_checksum});
@@ -84,7 +93,10 @@ void set_signal_type(Signal& s, ChecksumState* chk, const std::string& dbc_name,
       DBC_ASSERT(chk->counter_size == -1 || s.size == chk->counter_size, "COUNTER is not " << chk->counter_size << " bits long");
       DBC_ASSERT(chk->counter_start_bit == -1 || (s.start_bit % 8) == chk->counter_start_bit, "COUNTER starts at wrong bit");
       DBC_ASSERT(chk->little_endian == s.is_little_endian, "COUNTER has wrong endianness");
-      s.type = COUNTER;
+
+      if (chk->checksum_type != TOYOTA_CHECKSUM) {
+        s.type = COUNTER;
+      }
     }
   }
 
@@ -98,7 +110,14 @@ void set_signal_type(Signal& s, ChecksumState* chk, const std::string& dbc_name,
   }
 }
 
-DBC* dbc_parse_from_stream(const std::string &dbc_name, std::istream &stream, ChecksumState *checksum) {
+DBC* dbc_parse(const std::string& dbc_path) {
+  std::ifstream infile(dbc_path);
+  if (!infile) return nullptr;
+
+  const std::string dbc_name = std::filesystem::path(dbc_path).filename();
+
+  std::unique_ptr<ChecksumState> checksum(get_checksum(dbc_name));
+
   uint32_t address = 0;
   std::set<uint32_t> address_set;
   std::set<std::string> msg_name_set;
@@ -118,7 +137,7 @@ DBC* dbc_parse_from_stream(const std::string &dbc_name, std::istream &stream, Ch
   int line_num = 0;
   std::smatch match;
   // TODO: see if we can speed up the regex statements in this loop, SG_ is specifically the slowest
-  while (std::getline(stream, line)) {
+  while (std::getline(infile, line)) {
     line = trim(line);
     line_num += 1;
     if (startswith(line, "BO_ ")) {
@@ -152,7 +171,7 @@ DBC* dbc_parse_from_stream(const std::string &dbc_name, std::istream &stream, Ch
       sig.is_signed = match[offset + 5].str() == "-";
       sig.factor = std::stod(match[offset + 6].str());
       sig.offset = std::stod(match[offset + 7].str());
-      set_signal_type(sig, checksum, dbc_name, line_num);
+      set_signal_type(sig, checksum.get(), dbc_name, line_num);
       if (sig.is_little_endian) {
         sig.lsb = sig.start_bit;
         sig.msb = sig.start_bit + sig.size - 1;
@@ -195,16 +214,6 @@ DBC* dbc_parse_from_stream(const std::string &dbc_name, std::istream &stream, Ch
     v.sigs = signals[v.address];
   }
   return dbc;
-}
-
-DBC* dbc_parse(const std::string& dbc_path) {
-  std::ifstream infile(dbc_path);
-  if (!infile) return nullptr;
-
-  const std::string dbc_name = std::filesystem::path(dbc_path).filename();
-
-  std::unique_ptr<ChecksumState> checksum(get_checksum(dbc_name));
-  return dbc_parse_from_stream(dbc_name, infile, checksum.get());
 }
 
 const std::string get_dbc_root_path() {
