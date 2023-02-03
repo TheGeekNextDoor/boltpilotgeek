@@ -24,7 +24,7 @@ class CarState(CarStateBase):
   def update(self, pt_cp, cam_cp, loopback_cp):
     ret = car.CarState.new_message()
 
-    ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(pt_cp.vl["ECMPRDNL"]["PRNDL"], None))
+    # ret.gearShifter = self.parse_gear_shifter(self.shifter_values.get(pt_cp.vl["ECMPRDNL"]["PRNDL"], None))
 
     self.prev_cruise_buttons = self.cruise_buttons
     self.cruise_buttons = pt_cp.vl["ASCMSteeringButton"]["ACCButtons"]
